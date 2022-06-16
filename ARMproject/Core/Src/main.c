@@ -112,15 +112,32 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 			}		
 	}
 	else if(state == 1){
+	
+		if(mdp_try_size==0){
+			nb_push_second = 0;
+		}
+		
+		if(nb_push_second > 30)
+		{
+			//HAL_DMA_Abort(DMA1_Stream5_IRQn);
+			HAL_UART_Transmit(&huart2, "End reception of the try !\r\n", 28, 100);
+			return;
+		}
+	
 		HAL_UART_Transmit(&huart2, "[TRY] Received : ", 17, 10);
+		
+		
 		if(buffer == '\r')
 		{
 			HAL_UART_Transmit(&huart2, "End of TRY ! \r\n", 15, 100);
-			if((mdp_try_size == mdp_size) && (strncmp(mdp_try,mdp_try,mdp_size)==0)){
+			if((mdp_try_size == mdp_size) && (strncmp(mdp,mdp_try,mdp_size) == 0)){
 				state = 2;
 				HAL_UART_Transmit(&huart2, "Deverouillage Done ! \r\n", 23, 100);
+				HAL_UART_Transmit(&huart2,"1 --> 2\r\n", 11,100);
+				mdp_try_size = 0;
 			} else {
 				HAL_UART_Transmit(&huart2, "Deverouillage Failed ! \r\n", 25, 100);
+				mdp_try_size = 0;
 			}
 			
 		}	
@@ -132,6 +149,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 				HAL_UART_Transmit(&huart2, &buffer, 1, 10);
 				HAL_UART_Transmit(&huart2, "\r\n", 2, 100);
 				mdp_try[mdp_try_size++] = buffer;
+				HAL_UART_Receive_DMA(&huart2, &buffer, 1);
 			}
 		}
 	}
@@ -426,10 +444,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
                         break;
                      case 1:
                      	 if(nb_push_second < 1){   	// appuie cours de moins 1s
-                     	    				//TODO accepte dévérouillage pendant 30s (si dévérouillage state = 2, sinon state = 1
-                     	    state = 2;
-                     	    HAL_UART_Transmit(&huart2,"1 --> 2\r\n", 11,100);
-                     	    HAL_UART_Receive_DMA(&huart2, &buffer, 1); // Lecture du mot de pass //TODO 30s max et teste si ok
+                     	    HAL_UART_Receive_DMA(&huart2, &buffer, 1); //TODO accepte dévérouillage pendant 30s (si dévérouillage state = 2, sinon state = 1 	    
+                     	    // Lecture du mot de pass //TODO 30s max et teste si ok
                      	 }
                      	 else
                      	 	HAL_UART_Transmit(&huart2,"1 --> 1\r\n", 11,100);
@@ -437,6 +453,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
                      case 2:
                         if(nb_push_second > 5){  	// appuie de plus de 5s reset la carte 
                         	state = 0;
+                        	mdp_size = 0;
                         	HAL_UART_Transmit(&huart2,"2 --> 0\r\n", 11,100);
                         }
                         else {			// appuie de plus de moins de 1s vérouillage de la carte  
