@@ -31,6 +31,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+typedef struct {
+	char magic[8];
+	char idx;
+	char data[256];
+} data_store_t;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -55,6 +60,13 @@ DMA_HandleTypeDef hdma_usart2_tx;
   
   uint8_t *buffer;
   
+  static const data_store_t datastore __attribute__((__section__(".datastore"))) = {    // mémoire de la carte | pas flash 
+	.idx = 10,
+	.magic = "M4GIKNB",
+	.data = "alexandre"
+  };
+
+  
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,13 +82,6 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
- /* 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-	uart_buf_len = sprintf(uart_buf, "Ok fine !\r\n");
-  	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)uart_buf, uart_buf_len);
-  	received = 1;
-}
-*/
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	//TODO for reception
 }
@@ -120,6 +125,9 @@ int main(void)
   // Start timer
   HAL_TIM_Base_Start(&htim10);
   
+  //TODO décommenter pour voir élément dans la mémoire 
+  //HAL_UART_Transmit(&huart2, &datastore, sizeof(datastore), 200);
+  
 
   /* USER CODE END 2 */
 
@@ -127,25 +135,32 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_UART_Receive_DMA(&huart2, &buffer, 10);// TODO ne fonctionne pas
-    __WFI();
-    HAL_UART_Transmit_DMA(&huart2, &buffer, 10);
+    //uart_buf_len = HAL_UART_Receive_DMA(&huart2, &buffer, 10);// TODO ne fonctionne pas
+    //__WFI();
+    //HAL_UART_Transmit(&huart2, &buffer, uart_buf_len, 10);
     
     
     switch( state )
 		   {
-		      case 0:
+		      case 0:   // state 0 : carte non configuré
+		        // TODO initialisation de la carte ? 
+		        // si carte pas initialisé clé de chiffrement &mot de passe vide sinon clé et mot de passe en flash
+		        // clé et mot de passe en flash utile que mise hors tenssion de la carte.
+		        //  commande d'initialisation mot de passe  "./mon-script init "mon-mot-de-passe"
+		        //	tant que clé et mots de passe sont NULL alors on est à létat 0 sinon on passe état 1
                         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
     			 HAL_Delay(100);
     			 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
     			 HAL_Delay(100);
     			 break;
-                     case 1:
+                     case 1:   // state 1 : carte vérouillé
+                     	 // pour dévérouillé on appuie et on a 30s pour écrire le mot de passe 
                         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
                         HAL_Delay(1000);
                         nb_push_second++;
                         break;
-                     case 2:
+                     case 2:   // state 3 : carte dévérouillé
+                     	 //une fois la carte dévérouiller elle peux effectuer le chiffrement d'un fichier qui lui est envoyé
                         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
     			 HAL_Delay(1000);
     			 nb_push_second++;
@@ -340,31 +355,26 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		   switch( state )
 		   {
 		      case 0:
-                        HAL_UART_Transmit_DMA(&huart2,"0 --> 1\r\n", 11);
-                        /*
-                        HAL_UART_Receive_DMA(&huart2, &buffer, 10);// TODO ne fonctionne pas
-                        __WFI();
-                        HAL_UART_Transmit_DMA(&huart2, (uint8_t *)buffer, 10);
-                        */
+                        HAL_UART_Transmit(&huart2,"0 --> 1\r\n",11, 100);
                         state = 1;
                         break;
                      case 1:
-                     	 if(nb_push_second < 1){
-                     	    //TODO accepte dévérouillage pendant 30s
+                     	 if(nb_push_second < 1){   	// appuie cours de moins 1s
+                     	    				//TODO accepte dévérouillage pendant 30s (si dévérouillage state = 2, sinon state = 1
                      	    state = 2;
-                     	    HAL_UART_Transmit_DMA(&huart2,"1 --> 2\r\n", 11);
+                     	    HAL_UART_Transmit(&huart2,"1 --> 2\r\n", 11,100);
                      	 }
                      	 else
-                     	 	HAL_UART_Transmit_DMA(&huart2,"1 --> 1\r\n", 11);
+                     	 	HAL_UART_Transmit(&huart2,"1 --> 1\r\n", 11,100);
                         break;
                      case 2:
-                        if(nb_push_second > 5){
+                        if(nb_push_second > 5){  	// appuie de plus de 5s reset la carte 
                         	state = 0;
-                        	HAL_UART_Transmit_DMA(&huart2,"2 --> 0\r\n", 11);
+                        	HAL_UART_Transmit(&huart2,"2 --> 0\r\n", 11,100);
                         }
-                        else {
+                        else {			// appuie de plus de moins de 1s vérouillage de la carte  
                         	state = 1;
-                        	HAL_UART_Transmit_DMA(&huart2,"2 --> 1\r\n", 11);
+                        	HAL_UART_Transmit(&huart2,"2 --> 1\r\n", 11,100);
                         }
                         break;
                      default:
