@@ -58,13 +58,21 @@ DMA_HandleTypeDef hdma_usart2_tx;
   uint16_t nb_push_second = 0; //nombre de seconde entre appuie et relachement 
   size_t state = 0;
   
-  uint8_t *buffer;
+  uint8_t buffer;
   
   static const data_store_t datastore __attribute__((__section__(".datastore"))) = {    // mémoire de la carte | pas flash 
 	.idx = 10,
 	.magic = "M4GIKNB",
 	.data = "alexandre"
   };
+  
+  size_t mdp_max_size = 10;
+  size_t mdp_size = 0;
+  uint8_t mdp[10];
+  
+  size_t mdp_try_size = 0;
+  uint8_t mdp_try[10];
+  
 
   
 /* USER CODE END PV */
@@ -83,8 +91,60 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN 0 */
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-	//TODO for reception
+	
+	if(state == 0){
+		HAL_UART_Transmit(&huart2, "Received : ", 11, 10);
+		if(buffer == '\r')
+		{
+			HAL_UART_Transmit(&huart2, "End of MDP ! There is \' ", 24, 100);
+			HAL_UART_Transmit(&huart2, mdp, mdp_size, 100);
+			HAL_UART_Transmit(&huart2, " \'\r\n", 3, 100);
+			state = 1;
+		}	
+		else
+			if (mdp_size >= mdp_max_size){
+				HAL_UART_Transmit(&huart2, "Your MDP is too long, rewrite it please with max 10 caracters\r\n", 63, 100);
+				mdp_size = 0;
+			}else{
+				HAL_UART_Transmit(&huart2, &buffer, 1, 10);
+				HAL_UART_Transmit(&huart2, "\r\n", 2, 100);
+				mdp[mdp_size++] = buffer;
+			}		
+	}
+	else if(state == 1){
+		HAL_UART_Transmit(&huart2, "[TRY] Received : ", 17, 10);
+		if(buffer == '\r')
+		{
+			HAL_UART_Transmit(&huart2, "End of TRY ! \r\n", 15, 100);
+			if((mdp_try_size == mdp_size) && (strncmp(mdp_try,mdp_try,mdp_size)==0)){
+				state = 2;
+				HAL_UART_Transmit(&huart2, "Deverouillage Done ! \r\n", 23, 100);
+			} else {
+				HAL_UART_Transmit(&huart2, "Deverouillage Failed ! \r\n", 25, 100);
+			}
+			
+		}	
+		else{
+			if (mdp_try_size >= mdp_max_size){
+				HAL_UART_Transmit(&huart2, "Your MDP is too long, rewrite it please with max 10 caracters\r\n", 63, 100);
+				mdp_try_size = 0;
+			}else{
+				HAL_UART_Transmit(&huart2, &buffer, 1, 10);
+				HAL_UART_Transmit(&huart2, "\r\n", 2, 100);
+				mdp_try[mdp_try_size++] = buffer;
+			}
+		}
+	}
+	
+	
 }
+
+/*
+	~~~   Note Utile ~~~
+	
+	Pour écrire un retour à la ligne il faut un \r\n 
+	Pour capter un retour à la ligne il faut capté \r
+*/
 
 
 /* USER CODE END 0 */
@@ -135,15 +195,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //uart_buf_len = HAL_UART_Receive_DMA(&huart2, &buffer, 10);// TODO ne fonctionne pas
-    //__WFI();
-    //HAL_UART_Transmit(&huart2, &buffer, uart_buf_len, 10);
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+    
+    
+    
+    //HAL_UART_Transmit(&huart2, &buffer, 10, 10);
     
     
     switch( state )
 		   {
 		      case 0:   // state 0 : carte non configuré
 		        // TODO initialisation de la carte ? 
+		        
+		        HAL_UART_Receive_DMA(&huart2, &buffer, 1);
+		        
 		        // si carte pas initialisé clé de chiffrement &mot de passe vide sinon clé et mot de passe en flash
 		        // clé et mot de passe en flash utile que mise hors tenssion de la carte.
 		        //  commande d'initialisation mot de passe  "./mon-script init "mon-mot-de-passe"
@@ -161,6 +228,7 @@ int main(void)
                         break;
                      case 2:   // state 3 : carte dévérouillé
                      	 //une fois la carte dévérouiller elle peux effectuer le chiffrement d'un fichier qui lui est envoyé
+                     	 
                         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
     			 HAL_Delay(1000);
     			 nb_push_second++;
@@ -172,8 +240,6 @@ int main(void)
                      	 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
                      	 break;
                   }
-
-    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -294,7 +360,7 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA1_Stream6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
@@ -363,6 +429,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
                      	    				//TODO accepte dévérouillage pendant 30s (si dévérouillage state = 2, sinon state = 1
                      	    state = 2;
                      	    HAL_UART_Transmit(&huart2,"1 --> 2\r\n", 11,100);
+                     	    HAL_UART_Receive_DMA(&huart2, &buffer, 1); // Lecture du mot de pass //TODO 30s max et teste si ok
                      	 }
                      	 else
                      	 	HAL_UART_Transmit(&huart2,"1 --> 1\r\n", 11,100);
