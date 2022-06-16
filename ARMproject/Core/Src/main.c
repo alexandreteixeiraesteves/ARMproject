@@ -439,8 +439,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		   switch( state )
 		   {
 		      case 0:
-                        HAL_UART_Transmit(&huart2,"0 --> 1\r\n",11, 100);
-                        state = 1;
                         break;
                      case 1:
                      	 if(nb_push_second < 1){   	// appuie cours de moins 1s
