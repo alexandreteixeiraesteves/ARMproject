@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys
-
+import serial
 
 def send_esp(password):
     print("Send password: " + password + " to esp32")
@@ -15,6 +15,11 @@ def send_file_esp(file):
     crypt = "test"
     return crypt
 
+
+def my_uart():
+    ser = serial.Serial("/dev/ttyS0", 115200)   #specify your port and braudrate
+    data = ser.read()                         #read byte from serial device
+    print(data) 
 
 def filehandler(inputfile, outputfile):
     f = open(inputfile, "r")
